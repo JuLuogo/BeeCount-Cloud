@@ -3,12 +3,25 @@
 ## SQLite
 
 1. Stop app container.
-2. Restore db file:
-   - `cp backups/sqlite/beecount-<ts>.db /data/beecount.db`
-3. Start app container.
-4. Verify:
+2. **Remove old WAL helper files** (server runs in WAL mode — these belong to
+   the current db, not the backup):
+   ```bash
+   rm -f /data/beecount.db-wal /data/beecount.db-shm
+   ```
+3. Restore db file (backup is always a clean single file, no -wal / -shm):
+   ```bash
+   cp backups/sqlite/beecount-<ts>.db /data/beecount.db
+   ```
+4. Start app container. SQLite will auto-create new -wal / -shm on first
+   connection.
+5. Verify:
    - `GET /ready`
    - Web ledger list and one write smoke test.
+
+> Why step 2? In WAL mode `/data` contains `beecount.db` + `beecount.db-wal`
+> + `beecount.db-shm`. If you only overwrite `beecount.db` and leave the old
+> -wal around, SQLite will try to "recover" the old WAL log into the new
+> database and corrupt your restore. Always delete them first.
 
 ## PostgreSQL
 

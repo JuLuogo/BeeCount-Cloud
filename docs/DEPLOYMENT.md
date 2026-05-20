@@ -26,7 +26,23 @@ SQLite:
 ./scripts/backup_sqlite.sh /data/beecount.db ./backups/sqlite
 ```
 
-Or simply snapshot the whole `beecount_data` volume — it contains DB, attachments, backups, avatars, and the JWT secret in one place.
+The script uses `sqlite3 .backup` (SQLite Online Backup API), which is **safe
+while the server is running** and works in any journal mode. Output is always
+a single clean db file — no `-wal` / `-shm` companions.
+
+> ⚠️ Don't `cp` the raw db file: the server runs in WAL mode, and a bare `cp`
+> will miss uncommitted writes still sitting in `beecount.db-wal`. Always use
+> the script (or `sqlite3 .backup` directly).
+
+For a full volume snapshot (DB + attachments + JWT secret + previous backups
+all together), simply tar the `beecount_data` volume after stopping the
+container, OR use `VACUUM INTO` via the in-app backup runner (admin UI →
+"Backup") which integrates with rclone.
+
+### Restore
+
+See [ROLLBACK_SOP.md](./ROLLBACK_SOP.md) — note the **delete `-wal` / `-shm`
+before overwriting** step required by WAL mode.
 
 ## 4) Security baseline
 
