@@ -13,12 +13,12 @@ const SheetClose = SheetPrimitive.Close
 
 const SheetPortal = SheetPrimitive.Portal
 
-function SheetOverlay({
-  className,
-  ...props
-}: React.ComponentPropsWithoutRef<typeof SheetPrimitive.Overlay>) {
-  return <SheetPrimitive.Overlay className={cn('fixed inset-0 z-50 bg-black/50', className)} {...props} />
-}
+const SheetOverlay = React.forwardRef<
+  React.ElementRef<typeof SheetPrimitive.Overlay>,
+  React.ComponentPropsWithoutRef<typeof SheetPrimitive.Overlay>
+>(function SheetOverlay({ className, ...props }, ref) {
+  return <SheetPrimitive.Overlay ref={ref} className={cn('fixed inset-0 z-50 bg-black/50', className)} {...props} />
+})
 
 const sheetVariants = cva(
   'fixed z-50 gap-4 bg-card p-6 shadow-soft transition ease-in-out data-[state=closed]:duration-200 data-[state=open]:duration-300',
@@ -37,16 +37,14 @@ const sheetVariants = cva(
   }
 )
 
-function SheetContent({
-  side = 'right',
-  className,
-  children,
-  ...props
-}: React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content> & VariantProps<typeof sheetVariants>) {
+const SheetContent = React.forwardRef<
+  React.ElementRef<typeof SheetPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content> & VariantProps<typeof sheetVariants>
+>(function SheetContent({ side = 'right', className, children, ...props }, ref) {
   return (
     <SheetPortal>
       <SheetOverlay />
-      <SheetPrimitive.Content className={cn(sheetVariants({ side }), className)} {...props}>
+      <SheetPrimitive.Content ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
         {children}
         <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring">
           <X className="h-4 w-4" />
@@ -55,7 +53,7 @@ function SheetContent({
       </SheetPrimitive.Content>
     </SheetPortal>
   )
-}
+})
 
 function SheetHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return <div className={cn('flex flex-col space-y-2 text-left', className)} {...props} />

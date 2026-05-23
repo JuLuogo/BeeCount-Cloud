@@ -12,28 +12,28 @@ const DialogPortal = DialogPrimitive.Portal
 
 const DialogClose = DialogPrimitive.Close
 
-function DialogOverlay({
-  className,
-  ...props
-}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>) {
+const DialogOverlay = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Overlay>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
+>(function DialogOverlay({ className, ...props }, ref) {
   return (
     <DialogPrimitive.Overlay
+      ref={ref}
       className={cn('fixed inset-0 z-50 bg-black/50 backdrop-blur-[1px]', className)}
       {...props}
     />
   )
-}
+})
 
-function DialogContent({
-  className,
-  children,
-  showCloseButton = true,
-  ...props
-}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { showCloseButton?: boolean }) {
+const DialogContent = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { showCloseButton?: boolean }
+>(function DialogContent({ className, children, showCloseButton = true, ...props }, ref) {
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
+        ref={ref}
         className={cn(
           'fixed left-1/2 top-1/2 z-50 grid w-[92vw] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl border border-border bg-card p-6 text-card-foreground shadow-soft',
           className
@@ -50,7 +50,7 @@ function DialogContent({
       </DialogPrimitive.Content>
     </DialogPortal>
   )
-}
+})
 
 function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return <div className={cn('flex flex-col space-y-1.5 text-left', className)} {...props} />
