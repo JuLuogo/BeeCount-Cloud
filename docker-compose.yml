@@ -1,6 +1,6 @@
 services:
   beecount-cloud:
-    image: sunxiao0721/beecount-cloud:latest
+    image: ghcr.io/juluogo/peroezhangben:latest
     restart: unless-stopped
     ports:
       - "8869:8080"
