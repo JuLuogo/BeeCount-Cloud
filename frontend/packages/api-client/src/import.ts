@@ -80,6 +80,15 @@ export type ImportTransactionSample = {
   source_row_number: number
 }
 
+export type ImportAIFix = {
+  row_number: number
+  field_name: string
+  original_value: string
+  fixed_value: string
+  confidence: string
+  reason: string
+}
+
 export type ImportSummary = {
   import_token: string
   expires_at: string
@@ -93,6 +102,7 @@ export type ImportSummary = {
   stats: ImportStats
   sample_rows: Array<Record<string, string>>
   sample_transactions: ImportTransactionSample[]
+  ai_fixes: ImportAIFix[]
 }
 
 /** SSE 事件类型 */

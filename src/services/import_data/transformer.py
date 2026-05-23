@@ -18,6 +18,7 @@ from .schema import (
     ParsedRow,
     ParseWarning,
 )
+from .ai_fixer import AIFixResult
 
 logger = logging.getLogger(__name__)
 
@@ -52,15 +53,23 @@ def apply_mapping(
     *,
     rows: Iterable[ParsedRow],
     mapping: ImportFieldMapping,
+    ai_fixes: list[AIFixResult] | None = None,
 ) -> tuple[list[ImportTransaction], list[ImportError], list[ParseWarning]]:
     """逐行 transform,返回 (txs, errors, additional_warnings)。
 
     errors 非空 → caller 可拒绝执行(整体回滚契约)。
     warnings 给前端的统计 UI 展示。
+    ai_fixes: AI 自动纠错结果,应用到对应行。
     """
     txs: list[ImportTransaction] = []
     errors: list[ImportError] = []
     warnings: list[ParseWarning] = []
+
+    # 构建 AI 修复查找表:row_number → field_name → fixed_value
+    fix_map: dict[int, dict[str, str]] = {}
+    if ai_fixes:
+        for fix in ai_fixes:
+            fix_map.setdefault(fix.row_number, {})[fix.field_name] = fix.fixed_value
 
     if not mapping.required_complete:
         # 必填字段没全 map,所有行都失败,但只报一条 error 节省体积
@@ -84,7 +93,7 @@ def apply_mapping(
 
     for row in rows:
         try:
-            tx = _transform_row(row, mapping)
+            tx = _transform_row(row, mapping, fix_map.get(row.row_number))
             if tx is not None:
                 txs.append(tx)
         except _RowError as exc:
@@ -101,11 +110,18 @@ def apply_mapping(
     return txs, errors, warnings
 
 
-def _transform_row(row: ParsedRow, mapping: ImportFieldMapping) -> ImportTransaction | None:
+def _transform_row(
+    row: ParsedRow,
+    mapping: ImportFieldMapping,
+    row_fixes: dict[str, str] | None = None,
+) -> ImportTransaction | None:
     cells = row.cells
 
     # 1. tx_type
     raw_type = (cells.get(mapping.tx_type or "", "") or "").strip()
+    # 优先使用 AI 修复值
+    if row_fixes and "tx_type" in row_fixes:
+        raw_type = row_fixes["tx_type"]
     tx_type = _parse_tx_type(raw_type, mapping.expense_is_negative, cells, mapping)
     if tx_type is None:
         raise _RowError("PARSE_INVALID_FIELD", "tx_type",

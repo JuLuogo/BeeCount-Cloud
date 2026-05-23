@@ -1,18 +1,19 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, Sparkles } from 'lucide-react'
 
 import { Card, CardContent, useT } from '@beecount/ui'
-import type { ImportStats } from '@beecount/api-client'
+import type { ImportStats, ImportAIFix } from '@beecount/api-client'
 
 interface Props {
   stats: ImportStats
+  aiFixes?: ImportAIFix[]
 }
 
 /**
  * 预览统计卡 —— 顶部 3 个数字 + 「将创建/合并」分四组 + 告警折叠区。
  * 设计:.docs/web-ledger-import.md §2.6
  */
-export function ImportStatsCard({ stats }: Props) {
+export function ImportStatsCard({ stats, aiFixes = [] }: Props) {
   const t = useT()
   const dateRange =
     stats.time_range_start && stats.time_range_end
@@ -102,6 +103,30 @@ export function ImportStatsCard({ stats }: Props) {
               {stats.parse_warnings_total > stats.parse_warnings.length ? (
                 <li>… {t('import.stats.warnings.more', {
                   count: stats.parse_warnings_total - stats.parse_warnings.length,
+                })}</li>
+              ) : null}
+            </ul>
+          </Collapsible>
+        ) : null}
+
+        {/* AI 自动纠错折叠 */}
+        {aiFixes.length > 0 ? (
+          <Collapsible
+            title={t('import.stats.aiFixes.title', { count: aiFixes.length })}
+            tone="success"
+          >
+            <ul className="max-h-48 space-y-1 overflow-y-auto text-[11px] text-emerald-700 dark:text-emerald-400">
+              {aiFixes.map((f, idx) => (
+                <li key={idx}>
+                  <span className="font-mono">L{f.row_number}</span> · {f.field_name}
+                  {' '}: <span className="line-through opacity-60">{f.original_value}</span>
+                  {' → '}<span className="font-medium">{f.fixed_value}</span>
+                  {' · '}<span className="opacity-70">{f.reason}</span>
+                </li>
+              ))}
+              {aiFixes.length > 10 ? (
+                <li>… {t('import.stats.aiFixes.more', {
+                  count: aiFixes.length - 10,
                 })}</li>
               ) : null}
             </ul>
@@ -203,14 +228,16 @@ function Collapsible({
   children,
 }: {
   title: string
-  tone: 'warning' | 'error'
+  tone: 'warning' | 'error' | 'success'
   children: React.ReactNode
 }) {
   const [open, setOpen] = useState(false)
   const toneClass =
     tone === 'error'
       ? 'border-destructive/40 bg-destructive/5'
-      : 'border-amber-500/40 bg-amber-500/5'
+      : tone === 'success'
+        ? 'border-emerald-500/40 bg-emerald-500/5'
+        : 'border-amber-500/40 bg-amber-500/5'
   return (
     <div className={`rounded-lg border ${toneClass} px-3 py-2`}>
       <button

@@ -190,7 +190,7 @@ export function ImportPage() {
           </Card>
 
           {/* 统计卡 */}
-          <ImportStatsCard stats={summary.stats} />
+          <ImportStatsCard stats={summary.stats} aiFixes={summary.ai_fixes} />
 
           {/* 实际交易预览(前 10 笔) */}
           <TransactionsPreviewCard

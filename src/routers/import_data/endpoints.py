@@ -22,7 +22,7 @@ from ... import snapshot_builder
 from ...concurrency import lock_ledger_for_materialize
 from ...database import get_db
 from ...deps import get_current_user
-from ...models import AuditLog, Ledger, User
+from ...models import AuditLog, Ledger, User, UserProfile
 from ...routers.write._shared import (
     _TRANSACTION_WRITE_ROLES,
     _WRITE_SCOPE_DEP,
@@ -40,6 +40,7 @@ from ...services.import_data import (
     parse_csv_text,
     parse_excel_bytes,
 )
+from ...services.import_data.ai_fixer import try_fix_import_errors
 from ...services.import_data.cache import save_token_data, update_token
 from ...services.import_data.stats import build_existing_sets, compute_stats
 from ...snapshot_mutator import (
@@ -137,6 +138,7 @@ class ImportSummary(BaseModel):
     # 解析后的前 10 笔(应用 mapping + transformer 后)— 给用户"长这样"参考,
     # 不满意 → 编辑映射 → 重 preview 这里也跟着变
     sample_transactions: list[dict] = Field(default_factory=list)
+    ai_fixes: list[dict] = Field(default_factory=list)  # AI 自动纠错结果
 
 
 # ──────────── upload ────────────
@@ -323,6 +325,29 @@ async def execute_import(
 
     # transform 一次,确认无 row error 再开 transaction(避免无意义锁占用)
     txs, errors, _ = apply_mapping(rows=entry.data.rows, mapping=entry.mapping)
+
+    # AI 自动纠错:当存在 tx_type 解析错误时,尝试用 LLM 推断修复
+    if errors:
+        profile = db.scalar(select(UserProfile).where(UserProfile.user_id == current_user.id))
+        try:
+            fix_summary = asyncio.run(
+                try_fix_import_errors(
+                    errors=errors,
+                    rows=entry.data.rows,
+                    mapping=entry.mapping,
+                    user=current_user,
+                    profile=profile,
+                )
+            )
+            if fix_summary.fixes:
+                txs, errors, _ = apply_mapping(
+                    rows=entry.data.rows,
+                    mapping=entry.mapping,
+                    ai_fixes=fix_summary.fixes,
+                )
+        except Exception as exc:
+            logger.warning("ai_fixer failed during import execute: %s", exc)
+
     if errors:
         async def err_stream():
             err = errors[0]
@@ -676,6 +701,41 @@ def _build_summary(
     """跑一次 transform + stats 计算并打包。"""
     txs, errors, warnings = apply_mapping(rows=data.rows, mapping=mapping)
 
+    # AI 自动纠错:当存在 tx_type 解析错误时,尝试用 LLM 推断修复
+    ai_fixes_payload: list[dict] = []
+    if errors:
+        profile = db.scalar(select(UserProfile).where(UserProfile.user_id == current_user.id))
+        try:
+            fix_summary = asyncio.run(
+                try_fix_import_errors(
+                    errors=errors,
+                    rows=data.rows,
+                    mapping=mapping,
+                    user=current_user,
+                    profile=profile,
+                )
+            )
+            if fix_summary.fixes:
+                # 用 AI 修复后的结果重新 transform
+                txs, errors, warnings = apply_mapping(
+                    rows=data.rows,
+                    mapping=mapping,
+                    ai_fixes=fix_summary.fixes,
+                )
+                ai_fixes_payload = [
+                    {
+                        "row_number": f.row_number,
+                        "field_name": f.field_name,
+                        "original_value": f.original_value,
+                        "fixed_value": f.fixed_value,
+                        "confidence": f.confidence,
+                        "reason": f.reason,
+                    }
+                    for f in fix_summary.fixes
+                ]
+        except Exception as exc:
+            logger.warning("ai_fixer failed during import preview: %s", exc)
+
     if target_ledger_ext_id:
         try:
             ledger = _resolve_target_ledger(db, current_user, target_ledger_ext_id)
@@ -719,6 +779,7 @@ def _build_summary(
         stats=stats.to_payload(),
         sample_rows=sample,
         sample_transactions=sample_txs,
+        ai_fixes=ai_fixes_payload,
     )
 
 
